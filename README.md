@@ -1,1 +1,1 @@
-# NG
+# CC study NG
