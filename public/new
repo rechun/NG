@@ -1,0 +1,930 @@
+import React, { Component } from 'react';
+import { injectIntl, FormattedMessage } from "react-intl";
+import { Button, Dialog, Input, Grid, Field, Select, NumberPicker, TimePicker, DatePicker, Message, Form } from '@alifd/next';
+import moment from 'moment';
+import { connect } from 'react-redux';
+import { compose } from 'redux';
+import { EditCustomTable } from './../EditCustomTable';
+import { formItemLayout, defaultTimeVal } from '@/config';
+import { uniqueArr } from '@/utils/conver';
+import minus from '@assets/img/minus.svg';
+import plus from '@assets/img/plus.svg';
+const { RangePicker } = DatePicker;
+const { Row, Col } = Grid;
+const FormItem = Form.Item;
+import { alarmTempleListEvent, alarmTempleSingleEvent, alarmAlarmitemAddEvent } from '@/store/Alert/action';
+@injectIntl
+class AddDialog extends Component {
+    constructor(props) {
+        super(props)
+        this.state = {
+            initData: [
+                {
+                    "alarm_item": null,
+                    "alarm_sub_item": null,
+                    "op": null,
+                    "receiver": null,
+                    "alarm_value": null,
+                    "read_only": null,
+                }
+            ],
+            templateVisible: false,
+            templateListDialog: false,
+            templateList: null,//模板列表
+            sub_item_list: [],
+            templaceData: null,
+        };
+        this.field = new Field(this);
+        this.tempField = new Field(this);
+        this.useField = new Field(this);
+    }
+
+    handleDelData = (index) => {
+        const { intl: { formatMessage }, } = this.props;
+        const i18n = value => formatMessage({ id: value });
+        const { initData } = this.state;
+        if (initData.length > 1) {
+            let data = initData.splice(index, 1);
+            this.setState({
+                initData: initData
+            })
+        } else {
+            Message.error(i18n('app.prompt1.alart.template.dilaog.delete.last.one'))
+        }
+    }
+
+    handleReceiverChange = (index, val, record, key) => {
+        const { initData } = this.state;
+        let data = initData;
+        data[index][key] = val;
+        console.warn('handleReceiverChange-------->', val, 'key', key, 'initData--->', initData, 'data--->', data);
+        this.setState({
+            initData: data,
+        })
+    }
+
+
+    handleAlarmChange = (index, val, record) => {//告警项修改
+        const { intl: { formatMessage }, alarm_item_list, } = this.props;
+        const i18n = value => formatMessage({ id: value });
+        const { initData, } = this.state;
+        let alarm_item_label, default_value, sub_item_list, read_only;
+        alarm_item_list.map((item) => {
+            if (item.value === val) {
+                alarm_item_label = item.label;
+                default_value = item.default_value;
+                read_only = item.read_only;
+                if (item.sub_item) {
+                    sub_item_list = item.sub_item
+                } else {
+                    sub_item_list = null;
+                }
+            }
+        });
+        initData[index].alarm_item = val;
+        initData[index].alarm_item_label = alarm_item_label;
+        // initData[index].default_value = default_value;
+        initData[index].alarm_value = default_value;
+        initData[index].sub_item_list = sub_item_list;
+        initData[index].read_only = read_only;
+        const { setValues } = this.field;
+        this.setState({
+            // sub_item_list: sub_item_list,
+            initData: initData,
+        });
+        setValues({
+            ['alarm_value' + index]: default_value,
+            ['sub_item' + index]: null,
+        })
+    }
+
+
+    handleSubItemChange = (index, val, record) => {//告警子项修改
+        const { initData } = this.state;
+        let alarm_sub_item_lable;
+        let newList = initData[index].sub_item_list;
+        newList.forEach(element => {
+            if (element.value == val) {
+                alarm_sub_item_lable = element.name;
+            }
+        });
+        initData[index].alarm_sub_item_lable = val;
+        initData[index].alarm_sub_item = alarm_sub_item_lable;
+        this.setState({
+            initData: initData,
+        })
+    }
+
+    findObjKeys = (item, obj) => {
+        let tem_data;
+        if (item.indexOf('alarm_item') < 0) {//没找到
+
+        } else {//找到
+            tem_data[alarm_item] = obj[item];
+        }
+    }
+
+
+    handleValidate = () => {
+        const { intl: { formatMessage }, receiver_data, areaIds, hostDatas, instanceDatas, selectId, type, addRecord } = this.props;
+        const i18n = value => formatMessage({ id: value });
+        const { initData, receiver_list } = this.state;
+        const { validate, } = this.field;
+        validate((errors, values) => {
+            if (errors) {
+                return
+            }
+            let newObj = [];
+            if (initData && Array.isArray(initData)) {
+                console.warn('1122222initData--------->', initData);
+                initData.map((dataItem) => {
+                    console.warn('2222222dataItem--------->', dataItem);
+                    let dataValue = dataItem;
+                    let receiverObj = {
+                        group_receiver: [],
+                        user_receiver: [],
+                    };
+                    if (dataItem.receiver.group_receiver) {
+                        dataItem.receiver.group_receiver.map((item) => {
+                            if (receiver_data.group_receiver) {
+                                receiver_data.group_receiver.map((group) => {
+                                    if (item == group.group_name) {
+                                        receiverObj.group_receiver.push(group.group_id);
+                                    }
+                                })
+                            }
+                        })
+                    }
+
+                    if (dataItem.receiver.user_receiver) {
+                        dataItem.receiver.user_receiver.map((item) => {
+                            if (receiver_data.user_receiver) {
+                                receiver_data.user_receiver.map((group) => {
+                                    if (item == group.user_name) {
+                                        receiverObj.group_receiver.push(group.user_id);
+                                    }
+                                })
+                            }
+                        })
+                    };
+                    dataValue.receiver = {
+                        group_receiver: uniqueArr(receiverObj.group_receiver),
+                        user_receiver: uniqueArr(receiverObj.user_receiver),
+                    };
+                    console.warn('dataValue---------->', dataValue)
+                    newObj.push(dataValue);
+                    return dataItem
+                    // return dataValue;
+                    // receiverObj.group_receiver = uniqueArr(receiverObj.group_receiver);
+                    // receiverObj.user_receiver = uniqueArr(receiverObj.user_receiver);
+                })
+            };
+            console.warn('newObj---->', newObj)
+            switch (type) {
+                case 'config': {
+                    let params = newObj.map((item) => {
+                        return {
+                            "alarm_id": item.alarm_sub_item ? item.alarm_sub_item : item.alarm_item,
+                            "alarm_item": item.alarm_item_label,
+                            "alarm_sub_item": item.alarm_sub_item_lable,
+                            "alarm_start_time": item.alarm_start_time ? item.alarm_start_time.format('HH:mm') : '00:00',//秒
+                            "alarm_end_time": item.alarm_end_time ? item.alarm_end_time.format('HH:mm') : '00:00',
+                            "alarm_value": item.alarm_value,
+                            "read_only": item.read_only,
+                            "receiver": {
+                                group_receiver: item.receiver.group_receiver,
+                                user_receiver: item.receiver.user_receiver,
+                            },
+                            "status": 1, //告警项是否被禁
+                        }
+                    });
+                    let dataparams = {
+                        "type": parseInt(selectId) + 1,
+                        "Instance_name":
+                            hostDatas.length > 0 ? hostDatas.map((item) => {
+                                return item.value
+                            }) : instanceDatas.map((item) => {
+                                return item.value
+                            }),
+                        data: params
+                    }
+                    this.props.alarmAlarmitemAddEvent(dataparams)
+                        .then((res) => {
+                            if (res && res.status === 0) {
+                                Message.success(i18n('app.config.resource.add.success'));
+                                this.props.fetchData();
+                                this.props.handleDialog(false);
+                                this.setState({
+                                    initData: [
+                                        {
+                                            "alarm_item": null,
+                                            "alarm_sub_item": null,
+                                            "op": null,
+                                            "receiver": null,
+                                            "alarm_value": null,
+                                            "read_only": null,
+                                        }
+                                    ]
+                                })
+                            } else {
+                                Message.error(res.msg)
+                            }
+                        })
+                    break;
+                }
+                case 'template': {
+                    this.setState({
+                        templaceData: newObj
+                    });
+                    this.templateDialog(true);
+                    break;
+                }
+                case 'templatAdd': {
+                    let params = initData.map((item) => {
+                        return {
+                            "alarm_id": item.alarm_sub_item ? item.alarm_sub_item : item.alarm_item,
+                            "type": parseInt(selectId) + 1,
+                            "name": addRecord.name,
+                            "alarm_item": item.alarm_item_label,
+                            "alarm_sub_item": item.alarm_sub_item_lable,
+                            "alarm_start_time": item.alarm_start_time ? item.alarm_start_time.format('HH:mm') : '00:00',//秒
+                            "alarm_end_time": item.alarm_end_time ? item.alarm_end_time.format('HH:mm') : '00:00',
+                            "alarm_value": item.alarm_value,
+                            "read_only": item.read_only,
+                            // "receiver": receiverObj,
+                            "receiver": {
+                                group_receiver: item.receiver.group_receiver,
+                                user_receiver: item.receiver.user_receiver,
+                            },
+                        }
+                    });
+
+                    this.addTemplate(params)
+                    break;
+                }
+            }
+        })
+    }
+
+    templateDialog = (visible) => {
+        this.setState({
+            templateVisible: visible
+        })
+    }
+    validateUseTemplate = () => {
+        const { intl: { formatMessage }, receiver_data, selectId, type, hostDatas, instanceDatas } = this.props;
+        const i18n = value => formatMessage({ id: value });
+        const { validate } = this.useField;
+        validate((errors, values) => {
+            if (errors) {
+                return
+            };
+            let params = {
+                model_name: values.template_name,
+                type: parseInt(selectId) + 1
+            };
+            this.props.alarmTempleSingleEvent(params)//查询单个告警模版
+                .then((res) => {
+                    if (res && res.status === 0) {
+                        let templateData = res.data;
+                        let templateParams = templateData.map((item) => {
+                            let receiver = JSON.parse(item.receiver);
+                            return {
+                                "type": parseInt(selectId) + 1,
+                                "alarm_id": item.alarm_id,
+                                "alarm_item": item.alarm_item,
+                                "alarm_sub_item": item.alarm_sub_item,
+                                "alarm_start_time": item.alarm_start_time,//秒
+                                "alarm_end_time": item.alarm_end_time,
+                                "alarm_value": item.alarm_value,
+                                "read_only": item.read_only,
+                                "receiver": receiver,
+                                "status": 1, //告警项是否被
+                            }
+                        })
+                        let data = {
+                            "type": parseInt(selectId) + 1,
+                            "Instance_name":
+                                hostDatas.length > 0 ? hostDatas.map((item) => {
+                                    return item.value
+                                }) : instanceDatas.map((item) => {
+                                    return item.value
+                                })
+                            ,
+                            "data": templateParams
+                        }
+                        this.props.alarmAlarmitemAddEvent(data)
+                            .then((res) => {
+                                if (res && res.status === 0) {
+                                    Message.success(i18n('app.config.resource.add.success'));
+                                    this.props.fetchData();
+                                    this.handleTemplateList(false);
+                                } else {
+                                    Message.error(res.msg)
+                                }
+                            })
+                    }
+                })
+        });
+    }
+
+    validateTemplate = () => {
+        const { intl: { formatMessage }, receiver_data, selectId, type } = this.props;
+        const i18n = value => formatMessage({ id: value });
+        const { initData, receiver_list, templaceData } = this.state;
+        const { validate } = this.tempField;
+        validate((errors, values) => {
+            if (errors) {
+                return
+            }
+            let name = values.name;
+            // let receiverObj = {
+            //     group_receiver: [],
+            //     user_receiver: [],
+            // };
+            if (Array.isArray(templaceData)) {
+                // initData.map((dataItem) => {
+                //     console.warn('initDatadataItem', dataItem)
+                //     let dataValue = dataItem;
+                //     // let obj = [];
+                //     let receiverObj = {
+                //         group_receiver: [],
+                //         user_receiver: [],
+                //     };
+                //     dataItem.receiver.group_receiver.map((item) => {
+                //         receiver_data.group_receiver.map((group) => {
+                //             if (item == group.group_name) {
+                //                 receiverObj.group_receiver.push(group.group_id);
+                //             }
+                //         })
+                //     });
+                //     dataItem.receiver.user_receiver.map((item) => {
+                //         receiver_data.group_receiver.map((group) => {
+                //             if (item == group.group_name) {
+                //                 receiverObj.group_receiver.push(group.group_id);
+                //             }
+                //         })
+                //     })
+
+
+                //     dataValue.receiver = {
+                //         group_receiver: uniqueArr(receiverObj.group_receiver),
+                //         user_receiver: uniqueArr(receiverObj.user_receiver),
+                //     }
+                //     return dataValue;
+                //     // receiverObj.group_receiver = uniqueArr(receiverObj.group_receiver);
+                //     // receiverObj.user_receiver = uniqueArr(receiverObj.user_receiver);
+                // });
+                let params = templaceData.map((item) => {
+                    return {
+                        "type": parseInt(selectId) + 1,
+                        "name": name,
+                        "alarm_id": item.alarm_sub_item ? item.alarm_sub_item : item.alarm_item,
+                        "alarm_item": item.alarm_item_label,
+                        "alarm_sub_item": item.alarm_sub_item_lable,
+                        "alarm_start_time": item.alarm_start_time ? item.alarm_start_time.format('HH:mm') : '00:00',//秒
+                        "alarm_end_time": item.alarm_end_time ? item.alarm_end_time.format('HH:mm') : '00:00',
+                        "alarm_value": item.alarm_value,
+                        "read_only": item.read_only,
+                        "receiver": item.receiver,
+                        // "receiver": {
+                        //     group_receiver: item.receiver.group_receiver,
+                        //     user_receiver: item.receiver.user_receiver,
+                        // },
+                    }
+                });
+                this.addTemplate(params)
+            }
+        })
+    }
+
+    addTemplate = (params) => {
+        const { intl: { formatMessage }, } = this.props;
+        const i18n = value => formatMessage({ id: value });
+        this.props.alarmTempleAddEvent({
+            data: params
+        })//添加告警模板
+            .then((res) => {
+                if (res && res.status === 0) {
+                    Message.success(i18n('app.config.resource.add.success'));
+                    this.props.fetchData();
+                    this.templateDialog(false);
+                    this.props.handleDialog(false);
+                    this.setState({
+                        initData: [
+                            {
+                                "alarm_item": null,
+                                "alarm_sub_item": null,
+                                "op": null,
+                                "receiver": null,
+                                "alarm_value": null,
+                                "read_only": null,
+                            }
+                        ],
+                    })
+                } else {
+                    Message.error(res.msg)
+                }
+            });
+    }
+    handleAddData = () => {
+        const { initData } = this.state;
+        let list = initData.concat({
+            "alarmItem": null,
+            "subItem": null,
+            "op": null,
+        })
+        this.setState({
+            initData: list
+        })
+    }
+
+
+    getCellProps = (templateType, rowIndex, colIndex, dataIndex, record) => {
+        if (templateType) {
+            if (rowIndex >= 0) {
+                return {
+                    colSpan: 6
+                };
+            }
+        } else {
+            if (rowIndex >= 0) {
+                return {
+                    colSpan: 6
+                };
+            }
+        }
+    }
+    handleTemplateList = (visible) => {
+        const { intl: { formatMessage }, selectId } = this.props;
+        const i18n = value => formatMessage({ id: value });
+        this.setState({
+            templateListDialog: visible,
+        })
+        if (visible) {
+            this.props.handleDialog(false);//隐藏创建弹窗
+
+            let params = {
+                type: parseInt(selectId) + 1,
+            };
+            this.props.alarmTempleListEvent(params)
+                .then((res => {
+                    if (res && res.status === 0) {
+                        this.setState({
+                            templateList: res.data
+                        })
+                    }
+                }))
+        }
+    }
+
+    handleDialog = () => {
+        this.props.handleDialog(false);
+        this.setState({
+            initData: [
+                {
+                    "alarm_item": null,
+                    "alarm_sub_item": null,
+                    "op": null,
+                    "receiver": null,
+                    "alarm_value": null,
+                    "read_only": null,
+                }
+            ],
+        })
+    }
+    render() {
+        const { intl: { formatMessage }, handleDialog, visible, alarm_item_list, receiver_list, title, type, selectId } = this.props;
+        const i18n = value => formatMessage({ id: value });
+        const { initData, sub_item_list, templateVisible, templateListDialog, templateList } = this.state;
+        let templateType = selectId == 0 || selectId == 3;
+        const alarmItemList = [
+            {
+                title: i18n('app.resourcemanagement.host.hostmanagement.monitor.tab.warningitem'),
+                dataIndex: "alarm_item",
+                key: "alarm_item",//告警项
+                width: 150,
+                cell: (val, index, record) => {
+                    const { intl: { formatMessage }, } = this.props;
+                    const i18n = value => formatMessage({ id: value });
+                    const { init, setValue, reset } = this.field;
+                    return <Row >
+                        <Col span={templateType ? '4' : '5'} style={styles.col}>
+                            <Select
+                                style={styles.select}
+                                value={initData[index].alarm_item}
+                                dataSource={alarm_item_list ? alarm_item_list : null}
+                                {...init('alarm_item' + index, {
+                                    rules: [{
+                                        required: true,
+                                        message: i18n('app.resourcemanagement.host.hostmanagement.monitor.tab.warningitem') + i18n('app.prompt2.oracle.trace.form.tips.none')
+                                    }],
+                                    props: {
+                                        onChange: (val) => {
+                                            this.handleAlarmChange(index, val, record);
+                                        }
+                                    }
+                                },
+                                )}
+                            />
+                            {
+                                this.field.getError('alarm_item' + index) ?
+                                    <p style={styles.red}>{this.field.getError('alarm_item' + index).join(',')}</p> : ''
+                            }
+                        </Col>
+                        {
+                            templateType ?
+                                <Col span={templateType ? '4' : '5'} style={styles.col}>
+                                    <Select
+                                        style={styles.select}
+                                        value={initData[index].sub_item}
+                                        dataSource={initData[index] && initData[index].sub_item_list ? initData[index].sub_item_list : null}
+                                        {...init('sub_item' + index, {
+                                            rules: [{
+                                                // required: true,
+                                                message: i18n('app.prompt1.alart.tamplate.list.subitem') + i18n('app.prompt2.oracle.trace.form.tips.none')
+                                            }],
+                                            props: {
+                                                onChange: (val) => {
+                                                    this.handleSubItemChange(index, val, record);
+                                                }
+                                            }
+                                        },
+                                        )}
+                                    />
+                                    {this.field.getError('sub_item' + index) ?
+                                        <p style={styles.red}>{this.field.getError('sub_item' + index).join(',')}</p> : ''}
+                                </Col> : null
+                        }
+
+                        <Col span={templateType ? '4' : '5'} style={styles.col}>
+                            <Row>
+                                <Col span="12" >
+                                    <TimePicker
+                                        style={styles.time}
+                                        format="HH:mm"
+                                        {...init('alarm_start_time' + index, {//告警时间
+                                            initValue: defaultTimeVal,
+                                            rules: [{
+                                                required: true,
+                                                message: i18n('app.prompt1.alart.tamplate.list.time') + i18n('app.prompt2.oracle.trace.form.tips.none')
+                                            }],
+                                            props: {
+                                                onChange: (val) => {
+                                                    this.handleReceiverChange(index, val, record, 'alarm_start_time');
+                                                }
+                                            }
+                                        },
+                                        )}
+                                    />
+                                    {
+                                        this.field.getError('alarm_start_time' + index) ?
+                                            <p style={styles.red}>{this.field.getError('alarm_start_time' + index)}</p> : ''
+                                    }
+                                </Col>
+                                <span style={styles.border}>-</span>
+                                <Col span="12"  >
+                                    <TimePicker
+                                        style={styles.time}
+                                        format="HH:mm"
+                                        {...init('alarm_end_time' + index,
+                                            {//告警时间
+                                                initValue: defaultTimeVal,
+                                                rules: [{
+                                                    required: true,
+                                                    message: i18n('app.prompt1.alart.tamplate.list.time') + i18n('app.prompt2.oracle.trace.form.tips.none')
+                                                }],
+                                                props: {
+                                                    onChange: (val) => {
+                                                        this.handleReceiverChange(index, val, record, 'alarm_end_time');
+                                                    }
+                                                }
+                                            },
+                                        )}
+                                    />
+                                    {
+                                        this.field.getError('alarm_end_time' + index) ?
+                                            <p style={styles.red}>{this.field.getError('alarm_end_time' + index)}</p> : ''
+                                    }
+                                </Col>
+                            </Row>
+                        </Col>
+                        <Col span={templateType ? '4' : '5'} style={styles.col}>
+                            {
+                                initData[index].read_only === 0 ?
+                                    <span style={styles.value}>
+
+                                        {
+                                            initData[index].alarm_value === 0 ?//0 是开启 1是关闭
+                                                i18n("app.prompt2.alarm.config.list.yes") :
+                                                initData[index].alarm_value === 1 ?
+                                                    i18n("app.prompt2.alarm.config.list.none") :
+                                                    initData[index].alarm_value
+                                        }
+
+                                    </span> : <NumberPicker precision={0}
+                                        {...init('alarm_value' + index, {//告警阈值
+                                            // initValue: initData[index].alarm_value,
+                                            // value: initData[index].alarm_value,
+                                            rules: [{
+                                                required: true,
+                                                message: i18n('app.prompt1.alart.tamplate.list.threshold') + i18n('app.prompt2.oracle.trace.form.tips.none')
+                                            }],
+                                            props: {
+                                                onChange: (val) => {
+                                                    this.handleReceiverChange(index, val, record, 'alarm_value');
+                                                }
+                                            }
+                                        },
+                                        )}
+                                        value={initData[index].alarm_value}
+                                    />
+                            }
+                            {
+                                this.field.getError('alarm_value' + index) ?
+                                    <p style={styles.red}>{this.field.getError('alarm_value' + index)}</p> : ''
+                            }
+                        </Col>
+                        <Col span={templateType ? '4' : '5'} style={styles.col}>
+                            <Select
+                                mode="multiple"
+                                showSearch
+                                style={styles.select}
+                                value={initData[index].receiver}
+                                dataSource={receiver_list ? receiver_list : null}
+                                {...init('receiver' + index, {//接收人
+                                    rules: [{
+                                        required: true,
+                                        message: i18n('app.productManage.admin.alertconfig.receive') + i18n('app.prompt2.oracle.trace.form.tips.none')
+                                    }],
+                                    props: {
+                                        onChange: (val) => {
+                                            this.handleReceiverChange(index, val, record, 'receiver');
+                                        }
+                                    }
+                                },
+                                )}
+                            />
+                            {
+                                this.field.getError('receiver' + index) ?
+                                    <p style={styles.red}>{this.field.getError('receiver' + index)}</p> : ''
+                            }
+                        </Col>
+                        <Col span={templateType ? '4' : '5'} style={styles.col}>
+                            <div
+                                style={styles.icons}
+                            >
+                                <img title={i18n('app.cluster.alert.add')}
+                                    style={styles.plus} src={plus}
+                                    alt="" onClick={this.handleAddData} />
+                                <img title={i18n('app.cluster.alert.delete')}
+                                    style={styles.minus} src={minus}
+                                    alt="" onClick={this.handleDelData.bind(this, index)}
+                                />
+                            </div>
+                        </Col>
+                    </Row>
+                },
+            },
+            {
+                title: i18n('app.prompt1.alart.tamplate.list.subitem'),
+                dataIndex: "sub_item",
+                key: "sub_item",//告警子项
+                width: 150,
+            },
+
+            {
+                title: i18n("app.prompt1.alart.tamplate.list.time"),
+                dataIndex: "op",//告警时间段
+                key: "op",
+                width: templateType ? 150 : 200,
+            },
+            {
+                title: i18n("app.prompt1.alart.tamplate.list.threshold"),//'告警阈值',
+                dataIndex: "op",
+                key: "op",
+                width: 150,
+            },
+            {
+                title: i18n("app.productManage.admin.alertconfig.receive"),// '接收人',
+                dataIndex: "op",
+                key: "op",
+                width: 180,
+            },
+            {
+                title: '操作',
+                dataIndex: "op",
+                key: "op",
+                width: 150,
+            }
+        ];
+        if (!templateType) {
+            alarmItemList.splice(1, 1);
+        }
+        return (<React.Fragment>
+            <Dialog
+                style={{ width: '70%', position: 'relative' }}
+                title={title}
+                visible={visible}
+                footer={false}
+                height={500}
+                onCancel={() => {
+                    this.handleDialog(false)
+                }
+                }
+                onClose={() => {
+                    this.handleDialog(false)
+                }}>
+                <div className="alarmTable">
+                    <EditCustomTable
+                        {...this.props}
+                        shouldUpdatePosition
+                        style={{ marginTop: -20, marginBottom: 60 }}
+                        handleAlarmChange={this.handleAlarmChange}
+                        columns={alarmItemList}
+                        dataSource={initData}
+                        sub_item_list={sub_item_list}
+                        addData={this.handleAddData}
+                        handleAddData={this.handleAddData}
+                        handleDelData={this.handleDelData}
+                        getCellProps={this.getCellProps.bind(this, templateType)}
+                    />
+                </div>
+                <div style={{ width: '100%', height: 50, zIndex: 100, background: localStorage.getItem('theme') === 'dark' ? '#3a3c4b' : '#fff', position: 'absolute', bottom: 0, left: 20 }}>
+                    <Row style={{ ...styles.row }}>
+                        <Button
+                            type="primary"
+                            style={styles.add}
+                            onClick={this.handleValidate}
+                        >
+                            {i18n('app.prompt1.alart.config.add.dilaog.btn.add')}
+                        </Button>
+
+                        {
+                            type === 'config' ?//使用模板请点击此处
+                                <span
+                                    style={styles.useTemplate}
+                                    onClick={() => {
+                                        this.handleTemplateList(true)
+                                    }}>
+                                    {
+                                        i18n('app.prompt1.alart.config.add.dilaog.btn.template')
+                                    }
+                                </span> : null
+                        }
+                    </Row>
+                </div>
+            </Dialog >
+            <Dialog
+                style={styles.dialogTemplate}
+                title={//设置告警模板名称
+                    i18n('app.prompt1.alart.template.dilaog.create.template.title')
+                }
+                visible={templateVisible}
+                footer={false}
+                onCancel={() => {
+                    this.templateDialog(false)
+                }
+                }
+                onClose={() => {
+                    this.templateDialog(false)
+                }}>
+                <Form {...formItemLayout} field={this.tempField}>
+                    <FormItem
+                        label={i18n('app.mysqlmanagement.restore.info.tmpName')}
+                        required
+                        requiredMessage={
+                            i18n('app.mysqlmanagement.restore.info.tmpName') +
+                            i18n('app.prompt2.oracle.trace.form.tips.none')
+                        }
+                    >
+                        <Input
+                            name="name"
+                            maxLength={20}
+                            placeholder={i18n('app.prompt1.alart.template.dilaog.create.template.name.placehold')}
+                        />
+                    </FormItem>
+                    <FormItem >
+                        <Form.Submit validate type="primary" onClick={this.validateTemplate}>{i18n('app.btn.save')}</Form.Submit>
+                    </FormItem>
+                </Form>
+            </Dialog>
+            <Dialog
+                style={styles.dialogTemplate}
+                title={//使用告警模板
+                    i18n('app.prompt1.alart.template.dilaog.use.template.title')
+                }
+                visible={templateListDialog}
+                footer={false}
+                onCancel={() => {
+                    this.handleTemplateList(false)
+                }
+                }
+                onClose={() => {
+                    this.handleTemplateList(false)
+                }}>
+                <Form {...formItemLayout} field={this.useField}>
+                    <FormItem
+                        label={i18n('app.redis.rename.template.select')}
+                        required//选择模板
+                        requiredMessage={
+                            i18n('app.redis.rename.template.select') +
+                            i18n('app.prompt2.oracle.trace.form.tips.none')
+                        }
+                    >
+                        <Select
+                            style={styles.input}
+                            name="template_name"
+                            dataSource={templateList}
+                        />
+                    </FormItem>
+                    <FormItem >
+                        <Form.Submit validate type="primary" onClick={this.validateUseTemplate}>{i18n('app.btn.save')}</Form.Submit>
+                    </FormItem>
+                </Form>
+            </Dialog>
+        </React.Fragment>)
+    }
+}
+
+const styles = {
+    container: {
+        margin: '18px 18px 0px'
+    },
+    add: {
+        marginLeft: '20px'
+    },
+    dialog: {
+        width: '90%'
+    },
+    dialogTemplate: {
+        width: '35%'
+    },
+    useTemplate: {
+        marginLeft: '20px',
+        color: '#27a5e0',
+        lineHeight: '32px'
+    },
+    select: {
+        width: '98%',
+    },
+    col: {
+        display: 'flex',
+        justifyContent: 'center',
+    },
+    row: {
+        // marginTop: 15
+    },
+    input: {
+        width: '100%',
+    },
+    time: {
+        width: '90%',
+    },
+    red: {
+        color: 'red'
+    },
+    icon: {
+        marginRight: "10px"
+    },
+    border: {
+        lineHeight: '32px'
+    },
+    plus: {
+        width: 20,
+        cursor: 'pointer',
+        marginRight: 15
+    },
+    minus: {
+        width: 20,
+        cursor: 'pointer',
+        // marginLeft: "20px"
+    },
+    icons: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '100%'
+    },
+    value: {
+        lineHeight: '32px'
+    }
+}
+
+const mapDispatchToProps = {
+    alarmTempleListEvent,//获取告警模板列表名称
+    alarmTempleSingleEvent,
+    alarmAlarmitemAddEvent,
+};
+
+const mapStateToProps = (state) => {
+};
+
+const withConnect = connect(
+    mapStateToProps,
+    mapDispatchToProps
+);
+
+export default compose(
+    withConnect
+)(AddDialog);
